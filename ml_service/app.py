@@ -10,8 +10,7 @@ app = FastAPI(title="MSME Scheme Eligibility API")
 # ---------------- CORS ---------------- #
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[ "http://localhost:5173","https://msme-g3ht.onrender.com/",
-        "http://localhost:8080"],  # Change in production
+    allow_origins=["*"],  # Change in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

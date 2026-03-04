@@ -10,74 +10,42 @@ app = FastAPI(title="MSME Scheme Eligibility API")
 # ---------------- CORS ---------------- #
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Change in production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ---------------- OPTIONAL ML MODEL LOAD ---------------- #
-# If you train a multi-label model, keep these.
-# Otherwise you can remove model/scaler related lines.
-
-import os
+# ---------------- LOAD MODEL ---------------- #
 
 try:
-    model_path = os.path.join(os.path.dirname(__file__), "scheme_model.pkl")
-    scaler_path = os.path.join(os.path.dirname(__file__), "scheme_scaler.pkl")
-
-    model = joblib.load(model_path)
-    scaler = joblib.load(scaler_path)
-
+    model = joblib.load("scheme_model.pkl")
+    scaler = joblib.load("scheme_scaler.pkl")
     MODEL_AVAILABLE = True
+    print("Model loaded successfully")
 except Exception as e:
     print("Model loading failed:", e)
     MODEL_AVAILABLE = False
 
 
-# ---------------- FEATURE LIST ---------------- #
-FEATURES = [
-    "investment_amount",
-    "annual_turnover",
-    "business_type",
-    "sector",
-    "years_in_business",
-    "number_of_employees",
-    "udyam_registered",
-    "gst_registered",
-    "gender",
-    "social_category",
-    "minority_status",
-    "disability_status",
-    "age",
-    "rural_urban",
-    "state",
-    "aspirational_district",
-    "north_east_region",
-    "exporter",
-    "startup_dpiit",
-    "green_business",
-    "women_owned"
-]
-
-
 # ---------------- INPUT MODEL ---------------- #
+
 class EnterpriseInput(BaseModel):
     investment_amount: float
     annual_turnover: float
-    business_type: int        # 0=Manufacturing, 1=Service, 2=Trading
-    sector: int               # Encoded sector ID
+    business_type: int
+    sector: int
     years_in_business: float
     number_of_employees: int
-    udyam_registered: int     # 0 or 1
-    gst_registered: int       # 0 or 1
-    gender: int               # 0=Male, 1=Female, 2=Other
-    social_category: int      # 0=General,1=SC,2=ST,3=OBC
-    minority_status: int      # 0 or 1
-    disability_status: int    # 0 or 1
+    udyam_registered: int
+    gst_registered: int
+    gender: int
+    social_category: int
+    minority_status: int
+    disability_status: int
     age: int
-    rural_urban: int          # 0=Urban,1=Rural
-    state: int                # Encoded state ID
+    rural_urban: int
+    state: int
     aspirational_district: int
     north_east_region: int
     exporter: int
@@ -87,6 +55,7 @@ class EnterpriseInput(BaseModel):
 
 
 # ---------------- MSME CLASSIFICATION ---------------- #
+
 def classify_msme(investment: float, turnover: float):
 
     if investment <= 1e7 and turnover <= 5e7:
@@ -102,7 +71,8 @@ def classify_msme(investment: float, turnover: float):
         return "Not Classified"
 
 
-# ---------------- RULE-BASED SCHEME ENGINE ---------------- #
+# ---------------- RULE BASED SCHEME ENGINE ---------------- #
+
 def recommend_schemes(data: EnterpriseInput) -> List[Dict]:
 
     schemes = []
@@ -112,63 +82,54 @@ def recommend_schemes(data: EnterpriseInput) -> List[Dict]:
         data.annual_turnover
     )
 
-    # PM Mudra Yojana
     if msme_category == "Micro":
         schemes.append({
             "scheme": "PM Mudra Yojana",
             "reason": "Eligible because enterprise falls under Micro category."
         })
 
-    # Stand-Up India
     if data.social_category in [1, 2] or data.women_owned == 1:
         schemes.append({
             "scheme": "Stand-Up India",
             "reason": "Eligible under SC/ST or Women entrepreneur criteria."
         })
 
-    # CGTMSE
     if data.udyam_registered == 1:
         schemes.append({
             "scheme": "CGTMSE",
             "reason": "Udyam registered MSMEs are eligible for credit guarantee coverage."
         })
 
-    # Startup India Seed Fund
     if data.startup_dpiit == 1:
         schemes.append({
             "scheme": "Startup India Seed Fund Scheme",
             "reason": "Recognized DPIIT startup."
         })
 
-    # Export Promotion Scheme
     if data.exporter == 1:
         schemes.append({
             "scheme": "Export Promotion Capital Goods Scheme",
             "reason": "Exporter MSMEs are eligible for capital goods subsidy."
         })
 
-    # Green Scheme
     if data.green_business == 1:
         schemes.append({
             "scheme": "Credit Linked Capital Subsidy Scheme",
             "reason": "Green / Sustainable businesses qualify for capital subsidy."
         })
 
-    # North East Scheme
     if data.north_east_region == 1:
         schemes.append({
             "scheme": "North East Industrial Development Scheme",
             "reason": "Enterprise located in North-East region."
         })
 
-    # Aspirational District Scheme
     if data.aspirational_district == 1:
         schemes.append({
             "scheme": "Aspirational District Programme Benefits",
             "reason": "Enterprise located in notified aspirational district."
         })
 
-    # Women Entrepreneur Scheme
     if data.women_owned == 1:
         schemes.append({
             "scheme": "Mahila Udyam Nidhi Scheme",
@@ -185,12 +146,14 @@ def recommend_schemes(data: EnterpriseInput) -> List[Dict]:
 
 
 # ---------------- HEALTH CHECK ---------------- #
+
 @app.get("/")
 def health_check():
     return {"status": "MSME Scheme Eligibility Service Running"}
 
 
 # ---------------- MAIN PREDICTION API ---------------- #
+
 @app.post("/predict")
 def predict(data: EnterpriseInput):
 
@@ -204,32 +167,86 @@ def predict(data: EnterpriseInput):
     ml_prediction = None
 
     if MODEL_AVAILABLE:
-        input_data = np.array([[ 
-            data.investment_amount,
-            data.annual_turnover,
-            data.business_type,
-            data.sector,
-            data.years_in_business,
-            data.number_of_employees,
-            data.udyam_registered,
-            data.gst_registered,
-            data.gender,
-            data.social_category,
-            data.minority_status,
-            data.disability_status,
-            data.age,
-            data.rural_urban,
-            data.state,
-            data.aspirational_district,
-            data.north_east_region,
-            data.exporter,
-            data.startup_dpiit,
-            data.green_business,
-            data.women_owned
-        ]])
 
-        input_scaled = scaler.transform(input_data)
-        ml_prediction = model.predict(input_scaled).tolist()
+        try:
+
+            # ---------- FEATURE ENGINEERING ---------- #
+
+            investment_turnover_ratio = data.investment_amount / (data.annual_turnover + 1)
+
+            turnover_per_employee = data.annual_turnover / (data.number_of_employees + 1)
+
+            business_maturity_score = (
+                3 if data.years_in_business > 10
+                else 2 if data.years_in_business > 5
+                else 1
+            )
+
+            compliance_score = data.udyam_registered + data.gst_registered
+
+            demographic_advantage_score = (
+                (1 if data.gender == 1 else 0) +
+                (1 if data.social_category > 0 else 0) +
+                data.minority_status
+            )
+
+            regional_priority_score = (
+                data.north_east_region +
+                data.aspirational_district +
+                data.rural_urban
+            )
+
+            capital_intensity_score = data.investment_amount / (data.number_of_employees + 1)
+
+            enterprise_scale_index = (
+                data.annual_turnover * 0.6 +
+                data.investment_amount * 0.4
+            )
+
+            # ---------- FINAL MODEL INPUT (27 FEATURES) ---------- #
+
+            input_data = np.array([[
+
+                data.investment_amount,
+                data.annual_turnover,
+                data.years_in_business,
+                data.number_of_employees,
+                data.udyam_registered,
+                data.gst_registered,
+                data.gender,
+                data.social_category,
+                data.minority_status,
+                data.disability_status,
+                data.age,
+                data.rural_urban,
+                data.state,
+                data.aspirational_district,
+                data.north_east_region,
+                data.exporter,
+                data.startup_dpiit,
+                data.green_business,
+                data.women_owned,
+
+                investment_turnover_ratio,
+                turnover_per_employee,
+                business_maturity_score,
+                compliance_score,
+                demographic_advantage_score,
+                regional_priority_score,
+                capital_intensity_score,
+                enterprise_scale_index
+
+            ]])
+
+            input_scaled = scaler.transform(input_data)
+
+            ml_prediction = model.predict(input_scaled).tolist()
+
+        except Exception as e:
+
+            print("Prediction error:", e)
+            ml_prediction = None
+
 
     return {
         "msme_category": msme_category,

@@ -20,11 +20,18 @@ app.add_middleware(
 # If you train a multi-label model, keep these.
 # Otherwise you can remove model/scaler related lines.
 
+import os
+
 try:
-    model = joblib.load("scheme_model.pkl")
-    scaler = joblib.load("scheme_scaler.pkl")
+    model_path = os.path.join(os.path.dirname(__file__), "scheme_model.pkl")
+    scaler_path = os.path.join(os.path.dirname(__file__), "scheme_scaler.pkl")
+
+    model = joblib.load(model_path)
+    scaler = joblib.load(scaler_path)
+
     MODEL_AVAILABLE = True
-except:
+except Exception as e:
+    print("Model loading failed:", e)
     MODEL_AVAILABLE = False
 
 
